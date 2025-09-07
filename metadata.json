@@ -1,0 +1,5 @@
+{
+  "name": "Copy of MLB Weekly Home Run Tracker",
+  "description": "An application that uses AI to capture and display details about Major League Baseball home runs hit in the current week.",
+  "requestFramePermissions": []
+}

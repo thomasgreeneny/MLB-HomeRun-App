@@ -1,70 +1,57 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import type { HomeRun } from '../types';
+import { GoogleGenAI } from "@google/genai";
+import type { HomeRun, Source } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
-export async function fetchWeeklyHomeRuns(): Promise<HomeRun[]> {
+export async function fetchWeeklyHomeRuns(): Promise<{ homeRuns: HomeRun[], sources: Source[] }> {
   try {
     const prompt = `
-      List all notable MLB home runs hit this week. For each home run, provide the following details:
+      List all notable MLB home runs hit this week, using today's date as the reference for "this week". For each home run, provide the following details:
       - Player's full name
       - The player's team (full name, e.g., 'New York Yankees')
       - The opposing team (full name)
       - The date of the game in 'Month Day, Year' format.
-      - The estimated distance of the home run in feet.
+      - The estimated distance of the home run in feet. If the distance is not reported or unavailable, this field can be null.
       - A brief summary of the situation, like the inning, score, or if it was a significant moment (e.g., 'A 2-run shot in the bottom of the 8th to take the lead.').
 
-      Return at least 5 home runs, but no more than 20. If there are few home runs this week (e.g., All-Star break), just return the ones you can find.
+      Return ONLY a valid JSON array of objects. Do not include markdown ticks, surrounding text, or explanations. The JSON schema should be: [{ "playerName": "string", "team": "string", "opponent": "string", "date": "string", "distance": number | null, "details": "string" }]
     `;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
       config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              playerName: {
-                type: Type.STRING,
-                description: "Full name of the player who hit the home run."
-              },
-              team: {
-                type: Type.STRING,
-                description: "The full team name of the player."
-              },
-              opponent: {
-                type: Type.STRING,
-                description: "The opposing team's full name."
-              },
-              date: {
-                type: Type.STRING,
-                description: "Date of the game, e.g., 'July 20, 2024'."
-              },
-              distance: {
-                type: Type.INTEGER,
-                description: "Estimated distance of the home run in feet."
-              },
-              details: {
-                type: Type.STRING,
-                description: "A brief summary of the game situation for the home run."
-              }
-            },
-            required: ["playerName", "team", "opponent", "date", "distance", "details"]
-          },
-        },
+        tools: [{googleSearch: {}}],
       },
     });
 
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     const jsonText = response.text.trim();
-    const data = JSON.parse(jsonText);
-    return data as HomeRun[];
+    
+    // The model might wrap the JSON in markdown, so we need to clean it.
+    let cleanedJsonText = jsonText;
+    if (cleanedJsonText.startsWith('```json')) {
+        cleanedJsonText = cleanedJsonText.substring(7, cleanedJsonText.length - 3).trim();
+    } else if (cleanedJsonText.startsWith('```')) {
+      cleanedJsonText = cleanedJsonText.substring(3, cleanedJsonText.length - 3).trim();
+    }
+
+
+    try {
+        const data = JSON.parse(cleanedJsonText);
+        return { homeRuns: data as HomeRun[], sources };
+    } catch(parseError) {
+        console.error("Error parsing JSON response from Gemini API:", parseError);
+        console.error("Original response text:", jsonText);
+        throw new Error("Failed to parse AI response. The data might be in an unexpected format.");
+    }
 
   } catch (error) {
     console.error("Error fetching home run data from Gemini API:", error);
+     if (error instanceof Error && error.message.startsWith("Failed to parse")) {
+        throw error;
+    }
     throw new Error("Failed to retrieve home run data. The AI may be busy or an error occurred.");
   }
 }

@@ -24,10 +24,12 @@ const HomeRunCard: React.FC<HomeRunCardProps> = ({ homeRun }) => {
                 <p className="text-sm font-medium text-red-400">{homeRun.team}</p>
                 <h3 className="text-2xl font-bold text-white mt-1">{homeRun.playerName}</h3>
             </div>
-            <div className="text-right">
-                <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300">{homeRun.distance} ft</p>
-                <p className="text-xs text-gray-400">Est. Distance</p>
-            </div>
+            {homeRun.distance && homeRun.distance > 0 && (
+              <div className="text-right">
+                  <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300">{homeRun.distance} ft</p>
+                  <p className="text-xs text-gray-400">Est. Distance</p>
+              </div>
+            )}
         </div>
         
         <div className="mt-4 text-sm text-gray-400">
